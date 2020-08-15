@@ -23,3 +23,4 @@ clean :
 	rm -f *.o
 	rm -f sample_run
 	rm -f rtree
+	rm -f bulkload.txt

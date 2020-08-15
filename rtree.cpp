@@ -12,8 +12,8 @@ struct Child{
 	vector< pair<int,int>> MBR;	
 	Child(int dim) : id(-1)
 	{
-		for (int i = 0; i < dim; ++i){
-			MBR.push_back(make_pair(INT_MIN, INT_MIN));
+		for (int i = 0; i < dim; i++){
+			MBR.push_back(make_pair(INT_MAX, INT_MIN));
 		}		
 	}
 };
@@ -27,7 +27,7 @@ struct Node{
 	Node(int myid, int parentid, int dim, int maxCap) : id(myid), pid(parentid)
 	{
 		for (int i = 0; i < dim; ++i){
-			MBR.push_back(make_pair(INT_MIN, INT_MIN));
+			MBR.push_back(make_pair(INT_MAX, INT_MIN));
 		}
 		for (int i = 0; i < maxCap; ++i){
 			Child child = Child(dim);
@@ -38,7 +38,7 @@ struct Node{
 	Node(int dim, int maxCap) : id(-1), pid(-1)
 	{
 		for (int i = 0; i < dim; ++i){
-			MBR.push_back(make_pair(INT_MIN, INT_MIN));
+			MBR.push_back(make_pair(INT_MAX, INT_MIN));
 		}
 		for (int i = 0; i < maxCap; ++i){
 			Child child = Child(dim);
@@ -52,6 +52,7 @@ struct Node{
 FileManager fm;
 int jump_size = sizeof(int);
 int dim, maxCap;
+int root_page_number = INT_MIN;
 
 void split_line(string line, vector <string> *out){
 	string word = "";
@@ -76,17 +77,91 @@ void getMBRfrompoint(vector<int> point, vector< pair<int,int> > *mbr){
 	}
 }
 
-void bulkload(string inputfile, int num_points){
+void recurse_until_root(FileHandler *fh, int start, int end){
+	cout << "Recursion: " << start << " " << end << endl;
+	if(end > start){
+		PageHandler ph;
+		PageHandler ph_child;
+		int start_pg_num = INT_MAX;
+		int end_pg_num = INT_MIN;
+		char* data;
+		char* data_child;
+		int counter = 0;
+		while(true){
+			ph = fh->NewPage();
+			data = ph.GetData();
+			Node point = Node(ph.GetPageNum(), -1, dim, maxCap);
+			// getMBRChild(temp, &point.MBR);
+			// Maintain start page as minimum page number 
+			if(point.id <= start_pg_num){
+				start_pg_num = point.id;
+			}
+
+			// Maintain end page as max page number 
+			if(point.id >= end_pg_num){
+				end_pg_num = point.id;
+			}
+
+			// Assign all children and set their parent id also
+			counter = 0;
+			while(start <= end){
+				// Fetch this child page and copy into memory
+				ph_child = fh->PageAt(start);
+				data_child = ph_child.GetData();
+				Node *child_point = (Node*) data_child;
+				// memcpy(child_point, &data_child[0], sizeof(Node));
+				// Setting parent's id and self child MBR
+				child_point->pid = point.id;
+				point.children[counter].MBR = child_point->MBR;
+				point.children[counter].id = child_point->id;
+				// Update your own MBR
+				for(int i = 0; i<point.MBR.size(); i++){
+					point.MBR[i].first = min(point.MBR[i].first, child_point->MBR[i].first);
+					point.MBR[i].second = max(point.MBR[i].second, child_point->MBR[i].second);
+				}
+				// Copy back child_point into page and mark it dirty
+				memcpy(&data_child[0], &child_point[0], sizeof(Node));
+				fh->MarkDirty(child_point->id);
+				fh->UnpinPage(child_point->id);
+				counter++;
+				start++;
+				// If maxCap children done, break
+				if(counter >= maxCap){
+					break;
+				}
+			}
+			memcpy(&data[0], &point, sizeof(Node));
+			fh->MarkDirty(point.id);
+			fh->UnpinPage(point.id);
+			if(start > end){
+				break;
+			}
+		}
+
+		if (start_pg_num == end_pg_num){
+			root_page_number = start_pg_num;
+		}
+		return recurse_until_root(fh, start_pg_num, end_pg_num);
+	}
+}
+
+void bulkload(string inputfile, int num_points, FileHandler *fhout){
 	// Open the input file
 	FileHandler fh = fm.OpenFile(inputfile.c_str());
+	PageHandler phout;
+	char *dataout;
+
 	// Get first page
 	PageHandler ph = fh.FirstPage();
 	char *data = ph.GetData ();
 	
 	// Start your reading
 	int id = 0;
-	vector< Node > leaves;
 	int start = 0;
+	int start_pg_num = INT_MAX;
+	int end_pg_num = INT_MIN;
+
+	cout << "Starting with BulkLoad\n";
 	for(int i = 0; i<num_points; i+=1){
 		// Check if page left is enough to contain next d dim point
 		if (start + jump_size*dim > PAGE_CONTENT_SIZE){
@@ -109,15 +184,35 @@ void bulkload(string inputfile, int num_points){
 			id += 1;
 			// cout << loc << " ";
 		}
-		Node point = Node(id, -1, maxCap, dim);
-		getMBRfrompoint(temp, &point.MBR);
-		leaves.push_back(point);
+		Node point = Node(id, -1, dim, maxCap);
+		// Assign MBR as a point sized rectangle
+		for(int i = 0; i<temp.size(); i++){
+			point.MBR[i] = make_pair(temp[i], temp[i]);
+		}
+
+		// getMBRfrompoint(temp, &point.MBR);
+		// leaves.push_back(point);
+		phout = fhout->NewPage();
+		dataout = phout.GetData();
+		point.id = phout.GetPageNum();
+		// Maintain start page as minimum page number 
+		if(point.id <= start_pg_num){
+			start_pg_num = point.id;
+		}
+
+		// Maintain end page as max page number 
+		if(point.id >= end_pg_num){
+			end_pg_num = point.id;
+		}
+		memcpy(&dataout[0], &point, sizeof(Node));
+		// fh.FlushPage();
+		fhout->MarkDirty(point.id);
+		fhout->UnpinPage(point.id);
 		start += jump_size*dim;
 		// cout << endl;
 	}
-
-
-	// To Implement
+	cout << "Starting with Recursion\n";
+	recurse_until_root(fhout, start_pg_num, end_pg_num);	
 	return ;
 }
 
@@ -142,15 +237,16 @@ int main(int argc, char *argv[]) {
 
 	ifstream infile(inputfile);
 	ofstream outfile (outputfile);
+	FileHandler fhout = fm.CreateFile("bulkload.txt");
 
 	if (infile.is_open() && outfile.is_open()){
 		string line;
 		while(getline(infile,line)){
 			vector <string>commands;
 			split_line(line, &commands);
-			// cout << commands[0] << " " << commands.size() << '\n';
+			cout << commands[0] << " " << commands.size() << '\n';
 			if (commands[0] == "BULKLOAD"){
-				bulkload(commands[1], stoi(commands[2]));
+				bulkload(commands[1], stoi(commands[2]), &fhout);
 				outfile << "BULKLOAD\n\n\n";
 			}else if(commands[0] == "INSERT"){
 				vector<int> points;
