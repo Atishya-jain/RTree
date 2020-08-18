@@ -12,6 +12,8 @@ FileManager fm;
 int jump_size = sizeof(int);
 int dim, maxCap, nodesize;
 int root_page_number = INT_MIN;
+int begin_children;
+int data_per_child;
 
 void copy_to_disk(char* data, int* point){
 	for(int j = 0; j<nodesize; j++){
@@ -78,13 +80,13 @@ void print_mbr(int *mbr){
 	// 	cout << *(mbr+i) << " ";
 	// }
 	cout << "Max Point: ";
-	for(int i = dim+1; i<=2*dim; i++){
+	for(int i = dim+2; i<=2*dim+1; i++){
 		cout << *(mbr+i) << " ";
 	}
 	cout << endl;
 
 	cout << "Min Point: ";
-	for(int i = 1; i<=dim; i++){
+	for(int i = 2; i<=dim+1; i++){
 		cout << *(mbr+i) << " ";
 	}
 	cout << endl;
@@ -107,87 +109,141 @@ void split_line(string line, vector <string> *out){
 	}
 }
 
-void getMBRfrompoint(vector<int> point, vector< pair<int,int> > *mbr){
-	for(int i = 0; i<point.size(); i++){
-		mbr->at(i) = make_pair(point[i], point[i]);
+// void getMBRfrompoint(vector<int> point, vector< pair<int,int> > *mbr){
+// 	for(int i = 0; i<point.size(); i++){
+// 		mbr->at(i) = make_pair(point[i], point[i]);
+// 	}
+// }
+
+void initialise(int *point){
+	*(point) = INT_MIN;
+	*(point+1) = INT_MIN;
+	for (int i = 2; i < dim+2; ++i){
+		*(point+i) = INT_MAX;
+	}
+	for (int i = dim+2; i < 2*dim+2; ++i){
+		*(point+i) = INT_MIN;
+	}
+	int start = begin_children;
+	for(int i = 0; i<maxCap; i++){
+		start = begin_children+i*data_per_child;
+		*(point+start) = INT_MIN;
+		for(int j = start+1; j<=start+dim; j++){
+			*(point+j) = INT_MAX;
+		}
+		for(int j = start+1+dim; j<=start+2*dim; j++){
+			*(point+j) = INT_MIN;
+		}
 	}
 }
 
-// void recurse_until_root(FileHandler *fh, int start, int end){
-// 	cout << "Recursion: " << start << " " << end << endl;
-// 	if(end > start){
-// 		PageHandler ph;
-// 		PageHandler ph_child;
-// 		int start_pg_num = INT_MAX;
-// 		int end_pg_num = INT_MIN;
-// 		// char* data;
-// 		// char* data_child;
-// 		int counter = 0;
-// 		while(true){
-// 			ph = fh->NewPage();
-// 			char* data = ph.GetData();
-// 			Node point = Node();
-// 			point.id = ph.GetPageNum();
-// 			// getMBRChild(temp, &point.MBR);
-// 			// Maintain start page as minimum page number 
-// 			if(point.id <= start_pg_num){
-// 				start_pg_num = point.id;
-// 			}
+void recurse_until_root(FileHandler *fh, int start, int end){
+	cout << "Recursion: " << start << " " << end << endl;
+	if(end > start){
+		PageHandler ph;
+		PageHandler ph_child;
+		int start_pg_num = INT_MAX;
+		int end_pg_num = INT_MIN;
+		// char* data;
+		// char* data_child;
+		int counter = 0;
+		while(true){
+			ph = fh->NewPage();
+			char* data = ph.GetData();
+			int point[nodesize];
+			initialise(point);
+			// Node point = Node();
+			point[0] = ph.GetPageNum();
+			// getMBRChild(temp, &point.MBR);
+			// Maintain start page as minimum page number 
+			if(point[0] <= start_pg_num){
+				start_pg_num = point[0];
+			}
 
-// 			// Maintain end page as max page number 
-// 			if(point.id >= end_pg_num){
-// 				end_pg_num = point.id;
-// 			}
+			// Maintain end page as max page number 
+			if(point[0] >= end_pg_num){
+				end_pg_num = point[0];
+			}
 
-// 			// Assign all children and set their parent id also
-// 			counter = 0;
-// 			while(start <= end){
-// 				// Fetch this child page and copy into memory
-// 				ph_child = fh->PageAt(start);
-// 				char* data_child = ph_child.GetData();
-// 				Node child_point = Node();
-// 				// Node *child_point = (Node*) data_child;
-// 				memcpy(&child_point, data_child, sizeof(Node));
-// 				// Setting parent's id and self child MBR
-// 				cout << "Child: " << child_point.id << endl;
-// 				print_mbr(&child_point.MBR);
-// 				child_point.pid = point.id;
-// 				point.children[counter].MBR = child_point.MBR;
-// 				point.children[counter].id = child_point.id;
-// 				// Update your own MBR
-// 				for(int i = 0; i<point.MBR.size(); i++){
-// 					point.MBR[i].first = min(point.MBR[i].first, child_point.MBR[i].first);
-// 					point.MBR[i].second = max(point.MBR[i].second, child_point.MBR[i].second);
-// 				}
-// 				// Copy back child_point into page and mark it dirty
-// 				memcpy(&data_child[0], &child_point, sizeof(Node));
-// 				fh->MarkDirty(child_point.id);
-// 				fh->UnpinPage(child_point.id);
-// 				counter++;
-// 				start++;
-// 				// If maxCap children done, break
-// 				if(counter >= maxCap){
-// 					break;
-// 				}
-// 			}
+			// Assign all children and set their parent id also
+			counter = 0;
+			while(start <= end){
+				// Fetch this child page and copy into memory
+				ph_child = fh->PageAt(start);
+				char* data_child = ph_child.GetData();
+				int child_point[nodesize];
+				initialise(child_point);
+				// Node child_point = Node();
+				// Node *child_point = (Node*) data_child;
+				copy_to_memory(data_child, child_point);
+				// memcpy(&child_point, data_child, sizeof(Node));
+				// Setting parent's id and self child MBR
+				cout << "Child: " << child_point[0] << endl;
+				print_mbr(child_point);
+				child_point[1] = point[0];
 
-// 			cout << "Page: " << point.id << endl;
-// 			print_mbr(&point.MBR);
+				// This assigns MBR and id of children into current parent node
+				// point.children[counter].MBR = child_point.MBR;
+				// point.children[counter].id = child_point.id;
 
-// 			memcpy(&data[0], &point, sizeof(Node));
-// 			fh->MarkDirty(point.id);
-// 			fh->UnpinPage(point.id);
-// 			if(start > end){
-// 				break;
-// 			}
-// 		}
+				int start_child = begin_children+counter*data_per_child;
+				point[begin_children+counter*data_per_child] = child_point[0];
+				for (int i = start_child+1; i < start_child+data_per_child; i++){
+					point[i] = child_point[i - start_child + 1];
+				}
 
-// 		if (start_pg_num == end_pg_num){
-// 			root_page_number = start_pg_num;
-// 		}
-// 		return recurse_until_root(fh, start_pg_num, end_pg_num);
-// 	}
-// }
+				// Update your own MBR
+				for(int i = 2; i<dim+2; i++){
+					if(point[0] == 100){
+						cout << point[i] << " " << child_point[i] << endl;
+					}
+					point[i] = min(point[i], child_point[i]);
+					point[i+dim] = max(point[i+dim], child_point[i+dim]);
+				}
+
+				// Copy back child_point into page and mark it dirty
+				// memcpy(&data_child[0], &child_point, sizeof(Node));
+				copy_to_disk(data_child, child_point);
+				fh->MarkDirty(child_point[0]);
+				fh->UnpinPage(child_point[0]);
+				counter++;
+				start++;
+				// If maxCap children done, break
+				if(counter >= maxCap){
+					break;
+				}
+			}
+
+			if(counter < maxCap){
+				int start_child = begin_children+counter*data_per_child;
+				for (int i = start_child; i < nodesize; i++){
+					point[i] = INT_MIN;
+				}
+				for(int i = counter; i< maxCap; i++){
+					start_child = begin_children+i*data_per_child;
+					for(int j = start_child+1; j<=start_child+dim; j++){
+						point[i] = INT_MAX;
+					}
+				}
+			}
+
+			cout << "Page: " << point[0] << endl;
+			print_mbr(point);
+			copy_to_disk(data, point);
+			// memcpy(&data[0], &point, sizeof(Node));
+			fh->MarkDirty(point[0]);
+			fh->UnpinPage(point[0]);
+			if(start > end){
+				break;
+			}
+		}
+
+		if (start_pg_num == end_pg_num){
+			root_page_number = start_pg_num;
+		}
+		return recurse_until_root(fh, start_pg_num, end_pg_num);
+	}
+}
 
 void foo(int ttemp, FileHandler *fhout){
 	PageHandler tempph = fhout->PageAt(ttemp);
@@ -252,12 +308,14 @@ void bulkload(string inputfile, int num_points, FileHandler *fhout){
 		cout << endl;
 		// Node point = Node();
 		int point[nodesize];
+		initialise(point);
+
 		point[0] = id;
 		cout << "New point assigned\n";
 		// Assign MBR as a point sized rectangle
-		for(int j = 1; j<=temp.size(); j++){
-			point[j] = temp[j-1];
-			point[j+dim] = temp[j-1];
+		for(int j = 2; j<=temp.size()+1; j++){
+			point[j] = temp[j-2];
+			point[j+dim] = temp[j-2];
 		}
 
 		// getMBRfrompoint(temp, &point.MBR);
@@ -276,40 +334,21 @@ void bulkload(string inputfile, int num_points, FileHandler *fhout){
 		}
 		cout << "Page: " << point[0] << endl;
 		print_mbr(point);
-
+		// Here assigning minimum MBR points as INT_MIN doesn't matter bcoz at leaves we don't check MBR of children
+		for (int j = 2*dim+2; j < nodesize; j++){
+			point[j] = INT_MIN;
+		}
 		copy_to_disk(dataout, point);
-		// for(int j = 0; j<nodesize; j++){
-		// 	memcpy(&dataout[j*jump_size], &point[j], sizeof(int));
-		// }
-		// memcpy(&dataout[0], &point[0], sizeof(int));
-		// int begin = jump_size;
-		// for(int j = 0; j<dim; j++){
-			// memcpy(&dataout[begin], &point.MBR[j].first, sizeof(int));
-			// memcpy(&dataout[begin+sizeof(int)], &point.MBR[j].second, sizeof(int));
-			// begin += 2*sizeof(int);
-		// }
-		// for(int j = 0; j<maxCap; j++){
-			// memcpy(&dataout[begin], &point.children[j].id, sizeof(int));
-			// begin += sizeof(int);
-			// for(int k = 0; k<dim; k++){
-				// memcpy(&dataout[begin], &point.children[j].MBR[k].first, sizeof(int));
-				// memcpy(&dataout[begin+sizeof(int)], &point.children[j].MBR[k].second, sizeof(int));
-				// begin += 2*sizeof(int);
-			// }
-			// memcpy(&dataout[begin+sizeof(int)], &point.children[j].MBR, 2*dim*sizeof(int));
-		// }
-		
-
 
 		fhout->MarkDirty(point[0]);
 		fhout->UnpinPage(point[0]);
 		fhout->FlushPage(point[0]);
-		foo(0, fhout);
+		// foo(0, fhout);
 		start += jump_size*dim;
 	}
-	foo(0, fhout);
+	// foo(0, fhout);
 	// cout << "Starting with Recursion\n";
-	// recurse_until_root(fhout, start_pg_num, end_pg_num);	
+	recurse_until_root(fhout, start_pg_num, end_pg_num);	
 	return ;
 }
 
@@ -382,7 +421,10 @@ int main(int argc, char *argv[]) {
 	string outputfile = argv[4];
 	cout << inputfile << " " << maxCap << " " << dim << " " << outputfile << endl;
 
-	nodesize = 1 + 2*dim + maxCap*(1+2*dim);
+	nodesize = 2 + 2*dim + maxCap*(1+2*dim);
+	begin_children = 2*dim+2;
+	data_per_child = 1+2*dim;
+
 	// global_tree = Node(dim, maxCap);
 
 	ifstream infile(inputfile);
