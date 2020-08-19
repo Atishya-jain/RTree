@@ -348,10 +348,14 @@ void bulkload(string inputfile, int num_points, FileHandler *fhout){
 
 		fhout->MarkDirty(point[0]);
 		fhout->UnpinPage(point[0]);
-		fhout->FlushPage(point[0]);
+		// fhout->FlushPage(point[0]);
 		// foo(0, fhout);
 		start += jump_size*dim;
 	}
+
+	// Unpin the last page that was being used
+	fh.UnpinPage(ph.GetPageNum());
+
 	// foo(0, fhout);
 	// cout << "Starting with Recursion\n";
 	recurse_until_root(fhout, start_pg_num, end_pg_num);	
@@ -359,7 +363,9 @@ void bulkload(string inputfile, int num_points, FileHandler *fhout){
 }
 
 void insert(vector <int> *points, FileHandler *fhout){
-	// To Implement
+	PageHandler ph;
+	
+		// To Implement
 	return ;
 }
 
@@ -418,11 +424,12 @@ bool query(vector <int> *points, FileHandler *fhout, queue<int>*bfs_queue){
 			cout << "Leaf\n";
 			if(is_contained(node, -1, points)){
 				cout << "Found\n";
+				fhout->UnpinPage(pg_num);
 				return true;
 			}
 		}
 		fhout->UnpinPage(pg_num);
-
+		// fm.PrintBuffer();
 		cout << "queue size: " << bfs_queue->size() << endl;
 	}
 	return false;
