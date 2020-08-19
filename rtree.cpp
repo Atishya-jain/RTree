@@ -27,6 +27,45 @@ void copy_to_memory(char* data, int* point){
 	}	
 }
 
+bool is_contained(int *mbr, int child, vector <int> *points){
+	int start;
+	if(child == -1){
+		start = 2;
+	}else{
+		start = 2 + 2*dim + 1 + child*(2*dim+1);
+	}
+
+	for(int i = start; i<start+dim; i++){
+		if((points->at(i-start) > *(mbr+i+dim)) || (points->at(i-start) < *(mbr+i))){
+			return false;
+		}
+	}
+	return true;
+}
+
+double get_area(int* node, int child){
+	int start;
+	if(child == -1){
+		start = 2;
+	}else{
+		start = 2 + 2*dim + 1 + child*(2*dim+1);
+	}
+	double area = 1;
+	for(int i = start; i<start+dim; i++){
+		area *= (*(node+i+dim)-*(node+i));
+	}
+	return area;
+}
+
+bool is_leaf(int *node){
+	for(int i = 0; i<maxCap; i+=1){
+		if(get_area(node, i) != 0){
+			return false;
+		}
+	}
+	return true;
+}
+
 
 // // Children inside a node
 // struct Child{
@@ -133,7 +172,7 @@ void initialise(int *point){
 	int start = begin_children;
 	for(int i = 0; i<maxCap; i++){
 		start = begin_children+i*data_per_child;
-		*(point+start) = INT_MIN;
+		*(point+start) = -1;
 		for(int j = start+1; j<=start+dim; j++){
 			*(point+j) = INT_MAX;
 		}
@@ -220,18 +259,19 @@ void recurse_until_root(FileHandler *fh, int start, int end){
 				}
 			}
 
-			if(counter < maxCap){
-				int start_child = begin_children+counter*data_per_child;
-				for (int i = start_child; i < nodesize; i++){
-					point[i] = INT_MIN;
-				}
-				for(int i = counter; i< maxCap; i++){
-					start_child = begin_children+i*data_per_child;
-					for(int j = start_child+1; j<=start_child+dim; j++){
-						point[i] = INT_MAX;
-					}
-				}
-			}
+			// if(counter < maxCap){
+			// 	int start_child = begin_children+counter*data_per_child;
+			// 	for (int i = start_child; i < nodesize; i++){
+			// 		point[i] = INT_MIN;
+			// 	}
+			// 	for(int i = counter; i< maxCap; i++){
+			// 		start_child = begin_children+i*data_per_child;
+			// 		point[start_child] = -1;
+			// 		for(int j = start_child+1; j<=start_child+dim; j++){
+			// 			point[i] = INT_MAX;
+			// 		}
+			// 	}
+			// }
 
 			cout << "Page: " << point[0] << endl;
 			print_mbr(point, -1);
@@ -283,52 +323,59 @@ void bulkload(string inputfile, int num_points, FileHandler *fhout){
 	char *data = ph.GetData ();
 	
 	// Start your reading
-	int id = 0;
 	int start = 0;
 	int start_pg_num = INT_MAX;
 	int end_pg_num = INT_MIN;
-
+	int i = 0;
 	cout << "Starting with BulkLoad\n";
-	for(int i = 0; i<num_points; i+=1){
-		// Check if page left is enough to contain next d dim point
-		if (start + jump_size*dim > PAGE_CONTENT_SIZE){
-			int page_number= ph.GetPageNum();
-			fh.UnpinPage(page_number);
-			// Here ideally we shouldn't get any error. Think if error handling needs to be done ----------------------------
-			ph=fh.NextPage(page_number);
-			data=ph.GetData();
-			start = 0;
-		}
 
-		// Now from whatever page and start offset, read the point.
-		// Here it is guaranteed for the point to be in page
-		vector<int> temp;
-		cout << "loc ";
-		for (int j = start; j<start+jump_size*dim; j+=jump_size){
-			int loc;
-			memcpy(&loc, &data[j], jump_size);
-			temp.push_back(loc);
-			cout << loc << " ";
-			id += 1;
-		}
-		cout << endl;
-		// Node point = Node();
+	while(true){
 		int point[nodesize];
 		initialise(point);
 
-		point[0] = id;
-		cout << "New point assigned\n";
-		// Assign MBR as a point sized rectangle
-		for(int j = 2; j<=temp.size()+1; j++){
-			point[j] = temp[j-2];
-			point[j+dim] = temp[j-2];
-		}
-
-		// getMBRfrompoint(temp, &point.MBR);
-		// leaves.push_back(point);
 		phout = fhout->NewPage();
 		char* dataout = phout.GetData();
 		point[0] = phout.GetPageNum();
+		point[1] = -1;
+		cout << "New point assigned\n";
+		int num_children = 0;
+		int index = 0;
+		while(num_children<maxCap && i<num_points){
+			// Check if page left is enough to contain next d dim point
+			if (start + jump_size*dim > PAGE_CONTENT_SIZE){
+				int page_number= ph.GetPageNum();
+				fh.UnpinPage(page_number);
+				// Here ideally we shouldn't get any error. Think if error handling needs to be done ----------------------------
+				ph=fh.NextPage(page_number);
+				data=ph.GetData();
+				start = 0;
+			}
+
+			// Now from whatever page and start offset, read the point.
+			// Here it is guaranteed for the point to be in page
+			vector<int> temp;
+			cout << "loc ";
+			for (int j = start; j<start+jump_size*dim; j+=jump_size){
+				int loc;
+				memcpy(&loc, &data[j], jump_size);
+				temp.push_back(loc);
+				cout << loc << " ";
+			}
+			cout << endl;
+
+			// Assign MBR as a point sized rectangle
+			index = 2 + 2*dim + num_children*data_per_child;
+			point[index] = -1;
+			for(int j = index+1; j<index+1+dim; j++){
+				point[j] = temp[j-index-1];
+				point[j+dim] = temp[j-index-1];
+				point[j-index+1] = min(point[j-index+1], point[j]);
+				point[j-index+1+dim] = max(point[j-index+1+dim], point[j+dim]);
+			}
+			num_children++;
+			i++;
+			start += jump_size*dim;
+		}
 		// Maintain start page as minimum page number 
 		if(point[0] <= start_pg_num){
 			start_pg_num = point[0];
@@ -338,61 +385,63 @@ void bulkload(string inputfile, int num_points, FileHandler *fhout){
 		if(point[0] >= end_pg_num){
 			end_pg_num = point[0];
 		}
+
 		cout << "Page: " << point[0] << endl;
 		print_mbr(point, -1);
-		// Here assigning minimum MBR points as INT_MIN doesn't matter bcoz at leaves we don't check MBR of children
-		for (int j = 2*dim+2; j < nodesize; j++){
-			point[j] = INT_MIN;
-		}
+		// // Here assigning minimum MBR points as INT_MIN doesn't matter bcoz at leaves we don't check MBR of children
 		copy_to_disk(dataout, point);
 
 		fhout->MarkDirty(point[0]);
 		fhout->UnpinPage(point[0]);
-		// fhout->FlushPage(point[0]);
-		// foo(0, fhout);
-		start += jump_size*dim;
+		if(i >= num_points){
+			break;
+		}
+		foo(0, fhout);
 	}
 
 	// Unpin the last page that was being used
 	fh.UnpinPage(ph.GetPageNum());
 
-	// foo(0, fhout);
+	foo(0, fhout);
 	// cout << "Starting with Recursion\n";
 	recurse_until_root(fhout, start_pg_num, end_pg_num);	
 	return ;
 }
 
-void insert(vector <int> *points, FileHandler *fhout){
-	PageHandler ph;
-	
-		// To Implement
-	return ;
-}
+// void insert(vector <int> *points, FileHandler *fhout, int pg_num){
+// 	PageHandler ph = fhout->PageAt(pg_num);
+// 	char *data = ph.GetData();
+// 	int node[nodesize];
+// 	copy_to_memory(data, node);
+// 	// If the node is not a leaf
+// 	if(!is_leaf(node)){
+// 		// Finsing child with min area of expansion on insert
+// 		double exp_area;
+// 		double min_area = -1;
+// 		int min_area_pg = -1;
+// 		for (int i = 0; i < maxCap; i++){
+// 			exp_area = get_expanded_area(points, node, i);
+// 			if (exp_area <= min_area || min_area == -1){
+// 				min_area = exp_area;
+// 				min_area_pg = get_child_pg(node, i);
+// 			}
+// 		}
+// 		fhout->UnpinPage(pg_num);
+// 		// Recurse on that child
+// 		insert(points, fhout, min_area_pg);
+// 	}else{
+// 		// If the node is leaf
+// 		// Find number of children already there
+// 		int num_children = get_num_children(node);
+// 		// If num children less than max, assign, update MBR and return, else split
+// 		if (num_children < maxCap){
+// 			node[begin_children+num_children*data_per_child] = 
+// 		}else{
 
-bool is_contained(int *mbr, int child, vector <int> *points){
-	int start;
-	if(child == -1){
-		start = 2;
-	}else{
-		start = 2 + 2*dim + 1 + child*(2*dim+1);
-	}
+// 		}
+// 	}
+// }
 
-	for(int i = start; i<start+dim; i++){
-		if((points->at(i-start) > *(mbr+i+dim)) || (points->at(i-start) < *(mbr+i))){
-			return false;
-		}
-	}
-	return true;
-}
-
-bool is_leaf(int *node){
-	for(int i = begin_children; i<nodesize; i+=2*dim){
-		if(*(node+i) != INT_MIN){
-			return false; 
-		}
-	}
-	return true;
-}
 
 bool query(vector <int> *points, FileHandler *fhout, queue<int>*bfs_queue){
 	PageHandler ph;
@@ -422,10 +471,12 @@ bool query(vector <int> *points, FileHandler *fhout, queue<int>*bfs_queue){
 			}
 		}else{
 			cout << "Leaf\n";
-			if(is_contained(node, -1, points)){
-				cout << "Found\n";
-				fhout->UnpinPage(pg_num);
-				return true;
+			for(int i = 0; i<maxCap; i++){
+				if(is_contained(node, i, points)){
+					cout << "Found\n";
+					fhout->UnpinPage(pg_num);
+					return true;
+				}
 			}
 		}
 		fhout->UnpinPage(pg_num);
@@ -472,7 +523,7 @@ int main(int argc, char *argv[]) {
 				for (int i = 0; i < dim; i++){
 					points.push_back(stoi(commands[i+1]));
 				}
-				insert(&points, &fhout);
+				// insert(&points, &fhout);
 				outfile << "INSERT\n\n\n";
 			}else{
 				vector<int> points;
