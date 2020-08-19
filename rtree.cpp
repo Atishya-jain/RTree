@@ -65,28 +65,34 @@ void copy_to_memory(char* data, int* point){
 // 	}
 // };
 
-// void print_point(vector<int> *points){
-// 	cout << "Points: ";
-// 	for(int i = 0; i<points->size(); i++){
-// 		cout << points->at(i) << " ";
-// 	}
-// 	cout << endl;
-// }
+void print_point(vector<int> *points){
+	cout << "Points: ";
+	for(int i = 0; i<points->size(); i++){
+		cout << points->at(i) << " ";
+	}
+	cout << endl;
+}
 
-void print_mbr(int *mbr){
+void print_mbr(int *mbr, int child){
 	// cout << "point: ";
 	// for (int i = 0; i < nodesize; ++i)
 	// {
 	// 	cout << *(mbr+i) << " ";
 	// }
-	cout << "Max Point: ";
-	for(int i = dim+2; i<=2*dim+1; i++){
+	int start;
+	if(child == -1){
+		start = 2;
+	}else{
+		start = 2 + 2*dim + 1 + child*(2*dim+1);
+	}
+	cout << "Min Point: ";
+	for(int i = start; i<start+dim; i++){
 		cout << *(mbr+i) << " ";
 	}
 	cout << endl;
 
-	cout << "Min Point: ";
-	for(int i = 2; i<=dim+1; i++){
+	cout << "Max Point: ";
+	for(int i = start+dim; i<start+2*dim; i++){
 		cout << *(mbr+i) << " ";
 	}
 	cout << endl;
@@ -179,7 +185,7 @@ void recurse_until_root(FileHandler *fh, int start, int end){
 				// memcpy(&child_point, data_child, sizeof(Node));
 				// Setting parent's id and self child MBR
 				cout << "Child: " << child_point[0] << endl;
-				print_mbr(child_point);
+				print_mbr(child_point, -1);
 				child_point[1] = point[0];
 
 				// This assigns MBR and id of children into current parent node
@@ -228,7 +234,7 @@ void recurse_until_root(FileHandler *fh, int start, int end){
 			}
 
 			cout << "Page: " << point[0] << endl;
-			print_mbr(point);
+			print_mbr(point, -1);
 			copy_to_disk(data, point);
 			// memcpy(&data[0], &point, sizeof(Node));
 			fh->MarkDirty(point[0]);
@@ -259,7 +265,7 @@ void foo(int ttemp, FileHandler *fhout){
 	// }
 	copy_to_memory(tempdata, tempchild);
 	cout << "TEMP: " << tempchild[0] << endl;
-	print_mbr(tempchild);
+	print_mbr(tempchild, -1);
 	// free(tempchild);
 	fhout->UnpinPage(ttemp);
 	fhout->FlushPage(ttemp);
@@ -333,7 +339,7 @@ void bulkload(string inputfile, int num_points, FileHandler *fhout){
 			end_pg_num = point[0];
 		}
 		cout << "Page: " << point[0] << endl;
-		print_mbr(point);
+		print_mbr(point, -1);
 		// Here assigning minimum MBR points as INT_MIN doesn't matter bcoz at leaves we don't check MBR of children
 		for (int j = 2*dim+2; j < nodesize; j++){
 			point[j] = INT_MIN;
@@ -357,60 +363,68 @@ void insert(vector <int> *points, FileHandler *fhout){
 	return ;
 }
 
-// bool is_contained(vector< pair<int,int> > *mbr, vector <int> *points){
-// 	for(int i = 0; i<mbr->size(); i++){
-// 		if((points->at(i) > mbr->at(i).second) || (points->at(i) < mbr->at(i).first)){
-// 			return false;
-// 		}
-// 	}
-// 	return true;
-// }
+bool is_contained(int *mbr, int child, vector <int> *points){
+	int start;
+	if(child == -1){
+		start = 2;
+	}else{
+		start = 2 + 2*dim + 1 + child*(2*dim+1);
+	}
 
-// bool is_leaf(Node *node){
-// 	for(int i = 0; i<node->children.size(); i++){
-// 		if(node->children[i].id != -1){
-// 			return false; 
-// 		}
-// 	}
-// 	return true;
-// }
+	for(int i = start; i<start+dim; i++){
+		if((points->at(i-start) > *(mbr+i+dim)) || (points->at(i-start) < *(mbr+i))){
+			return false;
+		}
+	}
+	return true;
+}
+
+bool is_leaf(int *node){
+	for(int i = begin_children; i<nodesize; i+=2*dim){
+		if(*(node+i) != INT_MIN){
+			return false; 
+		}
+	}
+	return true;
+}
 
 bool query(vector <int> *points, FileHandler *fhout, queue<int>*bfs_queue){
-// 	PageHandler ph;
+	PageHandler ph;
 // 	// char* data;
 // 	// Node *node;
-// 	int pg_num;
+	int pg_num;
 
-// 	print_point(points);
+	print_point(points);
 
-// 	while(!bfs_queue->empty()){
-// 		pg_num = bfs_queue->front();
-// 		bfs_queue->pop();
-// 		cout << "Node ID: " << pg_num << endl;
-// 		ph = fhout->PageAt(pg_num);
-// 		char *data = ph.GetData();
-// 		Node node = Node();
-// 		memcpy(&node, data, sizeof(Node));
-// 		// (Node*) data;
-// 		print_mbr(&node.MBR);
-// 		if(!is_leaf(&node)){
-// 			cout << "Internal\n";
-// 			for(int i = 0; i<node.children.size(); i++){
-// 				print_mbr(&node.children[i].MBR);
-// 				if(is_contained(&node.children[i].MBR, points)){
-// 					cout << "Something new in BFS\n";
-// 					bfs_queue->push(node.children[i].id);
-// 				}
-// 			}
-// 		}else{
-// 			cout << "Leaf\n";
-// 			if(is_contained(&node.MBR, points)){
-// 				cout << "Found\n";
-// 				return true;
-// 			}
-// 		}
-// 		fhout->UnpinPage(pg_num);
-// 	}
+	while(!bfs_queue->empty()){
+		pg_num = bfs_queue->front();
+		bfs_queue->pop();
+		cout << "Node ID: " << pg_num << endl;
+		ph = fhout->PageAt(pg_num);
+		char *data = ph.GetData();
+		int node[nodesize];
+		copy_to_memory(data, node);
+		print_mbr(node, -1);
+		if(!is_leaf(node)){
+			cout << "Internal\n";
+			for(int i = 0; i<maxCap; i++){
+				print_mbr(node, i);
+				if(is_contained(node, i, points)){
+					cout << "Something new in BFS\n";
+					bfs_queue->push(node[begin_children+i*(2*dim+1)]);
+				}
+			}
+		}else{
+			cout << "Leaf\n";
+			if(is_contained(node, -1, points)){
+				cout << "Found\n";
+				return true;
+			}
+		}
+		fhout->UnpinPage(pg_num);
+
+		cout << "queue size: " << bfs_queue->size() << endl;
+	}
 	return false;
 }
 
@@ -429,7 +443,13 @@ int main(int argc, char *argv[]) {
 
 	ifstream infile(inputfile);
 	ofstream outfile (outputfile);
-	FileHandler fhout = fm.CreateFile("bulkload.txt");
+	FileHandler fhout;
+	try{
+		fhout = fm.CreateFile("bulkload.txt");
+	}catch(const InvalidFileException& e){
+		fm.DestroyFile("bulkload.txt");
+		fhout = fm.CreateFile("bulkload.txt");
+	}
 
 	if (infile.is_open() && outfile.is_open()){
 		string line;
