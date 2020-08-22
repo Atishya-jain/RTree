@@ -16,9 +16,11 @@ int begin_children;
 int data_per_child;
 
 void copy_to_disk(char* data, int* point){
+	cout << "Copy to disk starts now\n";
 	for(int j = 0; j<nodesize; j++){
 		memcpy((data + j*jump_size), (point+j), jump_size);
 	}
+	cout << "Copy to disk ends starts now\n";
 }
 
 void copy_to_memory(char* data, int* point){
@@ -223,7 +225,7 @@ void recurse_until_root(FileHandler *fh, int start, int end){
 		while(true){
 			ph = fh->NewPage();
 			char* data = ph.GetData();
-			int point[nodesize];
+			int *point = new int[nodesize];
 			initialise(point);
 			// Node point = Node();
 			point[0] = ph.GetPageNum();
@@ -244,7 +246,7 @@ void recurse_until_root(FileHandler *fh, int start, int end){
 				// Fetch this child page and copy into memory
 				ph_child = fh->PageAt(start);
 				char* data_child = ph_child.GetData();
-				int child_point[nodesize];
+				int *child_point = new int[nodesize];
 				// initialise(child_point);
 				// Node child_point = Node();
 				// Node *child_point = (Node*) data_child;
@@ -280,6 +282,7 @@ void recurse_until_root(FileHandler *fh, int start, int end){
 				fh->MarkDirty(child_point[0]);
 				fh->UnpinPage(child_point[0]);
 				fh->FlushPage(child_point[0]);
+				delete child_point;
 				counter++;
 				start++;
 				// If maxCap children done, break
@@ -309,6 +312,7 @@ void recurse_until_root(FileHandler *fh, int start, int end){
 			fh->MarkDirty(point[0]);
 			fh->UnpinPage(point[0]);
 			fh->FlushPage(point[0]);
+			delete point;
 			if(start > end){
 				break;
 			}
@@ -319,27 +323,6 @@ void recurse_until_root(FileHandler *fh, int start, int end){
 		}
 		return recurse_until_root(fh, start_pg_num, end_pg_num);
 	}
-}
-
-void foo(int ttemp, FileHandler *fhout){
-	PageHandler tempph = fhout->PageAt(ttemp);
-	char* tempdata = tempph.GetData();
-	// Node tempchild = Node();
-	// Node *tempchild = (Node*) tempdata;
-	// cout << sizeof(Node) << endl;
-	// Node *tempchild = new Node();
-	int tempchild[nodesize];
-	// memcpy(tempchild, &tempdata[0], nodesize*sizeof(int));
-	// for (int i = 0; i < nodesize; ++i){
-	// 	memcpy(&tempchild[i], &tempdata[i*jump_size], sizeof(int));
-	// }
-	copy_to_memory(tempdata, tempchild);
-	cout << "TEMP: " << tempchild[0] << endl;
-	print_mbr(tempchild, -1);
-	// free(tempchild);
-	fhout->UnpinPage(ttemp);
-	fhout->FlushPage(ttemp);
-	// cout <<"END\n";
 }
 
 void bulkload(string inputfile, int num_points, FileHandler *fhout){
@@ -360,7 +343,7 @@ void bulkload(string inputfile, int num_points, FileHandler *fhout){
 	cout << "Starting with BulkLoad\n";
 
 	while(true){
-		int point[nodesize];
+		int *point = new int[nodesize];
 		initialise(point);
 
 		phout = fhout->NewPage();
@@ -426,17 +409,16 @@ void bulkload(string inputfile, int num_points, FileHandler *fhout){
 		fhout->MarkDirty(point[0]);
 		fhout->UnpinPage(point[0]);
 		fhout->FlushPage(point[0]);
+		delete point;
 		if(i >= num_points){
 			break;
 		}
-		// foo(0, fhout);
 	}
 
 	// Unpin the last page that was being used
 	fh.UnpinPage(ph.GetPageNum());
 	fh.FlushPage(ph.GetPageNum());
 
-	// foo(0, fhout);
 	// cout << "Starting with Recursion\n";
 	recurse_until_root(fhout, start_pg_num, end_pg_num);	
 	return ;
@@ -605,12 +587,12 @@ pair<int, int> get_seeds(int *node, vector<int> *points){
 void AdjustParent(int old_pg_num, int new_pg_num, FileHandler *fhout){
 	PageHandler old_ph = fhout->PageAt(old_pg_num);
 	char *old_data = old_ph.GetData();
-	int old_node[nodesize];
+	int *old_node = new int[nodesize];
 	copy_to_memory(old_data, old_node);
 
 	PageHandler new_ph = fhout->PageAt(new_pg_num);
 	char *new_data = new_ph.GetData();
-	int new_node[nodesize];
+	int *new_node = new int[nodesize];
 	copy_to_memory(new_data, new_node);
 
 	int par_pg_num = new_node[1];
@@ -623,7 +605,7 @@ void AdjustParent(int old_pg_num, int new_pg_num, FileHandler *fhout){
 		char *root_data = root.GetData();
 		int root_pg_num = root.GetPageNum();
 		root_page_number = root_pg_num;
-		int root_node[nodesize];
+		int *root_node = new int[nodesize];
 		initialise(root_node);
 		// copy_to_memory(root_data, root_node);
 
@@ -666,14 +648,16 @@ void AdjustParent(int old_pg_num, int new_pg_num, FileHandler *fhout){
 		fhout->UnpinPage(old_pg_num);
 		fhout->UnpinPage(new_pg_num);
 		fhout->UnpinPage(root_pg_num);
-
 		fhout->FlushPage(old_pg_num);
 		fhout->FlushPage(new_pg_num);
 		fhout->FlushPage(root_pg_num);
+		delete new_node;
+		delete old_node;
+		delete root_node;
 	}else{
 		PageHandler par_ph = fhout->PageAt(par_pg_num);
 		char *par_data = par_ph.GetData();		
-		int par_node[nodesize];
+		int *par_node = new int[nodesize];
 		copy_to_memory(par_data, par_node);
 		int num_children = get_num_children(par_node);
 
@@ -712,10 +696,12 @@ void AdjustParent(int old_pg_num, int new_pg_num, FileHandler *fhout){
 			fhout->UnpinPage(new_pg_num);
 			fhout->UnpinPage(par_pg_num);
 			fhout->UnpinPage(old_pg_num);
-
 			fhout->FlushPage(new_pg_num);
 			fhout->FlushPage(par_pg_num);
 			fhout->FlushPage(old_pg_num);
+			delete new_node;
+			delete old_node;
+			delete par_node;
 		}else{
 			// // Here we would need to read old node as well to redistribute
 			// PageHandler old_ph = fhout->PageAt(old_pg_num);
@@ -728,10 +714,10 @@ void AdjustParent(int old_pg_num, int new_pg_num, FileHandler *fhout){
 			char *new_par_data = new_par_ph.GetData();
 			int new_par_pg_num = new_par_ph.GetPageNum();
 
-			int new_par_node[nodesize];
+			int *new_par_node = new int[nodesize];
 			initialise(new_par_node);
 
-			int old_par_node[nodesize];
+			int *old_par_node = new int[nodesize];
 			initialise(old_par_node);
 
 			// Choose two farthest seeds
@@ -767,13 +753,14 @@ void AdjustParent(int old_pg_num, int new_pg_num, FileHandler *fhout){
 				cout << "Page Requested of Child: " << par_node[index] << endl;
 				PageHandler temph = fhout->PageAt(par_node[index]);
 				char* tempdata = temph.GetData();
-				int tempnode[nodesize];
+				int *tempnode = new int[nodesize];
 				copy_to_memory(tempdata, tempnode);
 				tempnode[1] = new_par_node[0];
 				copy_to_disk(tempdata, tempnode);
 				fhout->MarkDirty(par_node[index]);
 				fhout->UnpinPage(par_node[index]);				
-				fhout->FlushPage(par_node[index]);				
+				fhout->FlushPage(par_node[index]);
+				delete tempnode;				
 			}else{
 				// TODO Allocate new_node
 				new_par_node[begin_children] = new_node[0];
@@ -826,13 +813,14 @@ void AdjustParent(int old_pg_num, int new_pg_num, FileHandler *fhout){
 						cout << "Page Requested of Childs: " << par_node[index] << endl;
 						PageHandler temph = fhout->PageAt(par_node[index]);
 						char* tempdata = temph.GetData();
-						int tempnode[nodesize];
+						int *tempnode = new int[nodesize];
 						copy_to_memory(tempdata, tempnode);
 						tempnode[1] = new_par_node[0];
 						copy_to_disk(tempdata, tempnode);
 						fhout->MarkDirty(par_node[index]);
 						fhout->UnpinPage(par_node[index]);
 						fhout->FlushPage(par_node[index]);
+						delete tempnode;
 					}
 					num_child++;
 				}
@@ -891,6 +879,12 @@ void AdjustParent(int old_pg_num, int new_pg_num, FileHandler *fhout){
 			fhout->FlushPage(par_pg_num);
 			fhout->FlushPage(new_par_pg_num);
 			fhout->FlushPage(old_pg_num);
+
+			delete new_node;
+			delete old_node;
+			delete par_node;
+			delete new_par_node;
+			delete old_par_node;
 			// Load Parent Page
 			AdjustParent(par_pg_num, new_par_pg_num, fhout);
 		}
@@ -901,7 +895,7 @@ void insert(vector <int> *points, FileHandler *fhout, int pg_num){
 	cout << "Page Number: " << pg_num << endl; 
 	PageHandler ph = fhout->PageAt(pg_num);
 	char *data = ph.GetData();
-	int node[nodesize];
+	int *node = new int[nodesize];
 	copy_to_memory(data, node);
 	cout << "My Parent Page Number: " << node[1] << endl; 
 	// print_point(points);
@@ -946,6 +940,7 @@ void insert(vector <int> *points, FileHandler *fhout, int pg_num){
 		fhout->MarkDirty(pg_num);
 		fhout->UnpinPage(pg_num);
 		fhout->FlushPage(pg_num);
+		delete node;
 		// Recurse on that child
 		insert(points, fhout, min_area_pg);
 	}else{
@@ -970,6 +965,7 @@ void insert(vector <int> *points, FileHandler *fhout, int pg_num){
 			fhout->MarkDirty(pg_num);
 			fhout->UnpinPage(pg_num);
 			fhout->FlushPage(pg_num);
+			delete node;
 			fm.PrintBuffer();
 		}else{
 			// Create a new page
@@ -977,10 +973,10 @@ void insert(vector <int> *points, FileHandler *fhout, int pg_num){
 			char *new_data = ph_new.GetData();
 			int new_pg_num = ph_new.GetPageNum();
 
-			int new_node[nodesize];
+			int *new_node = new int[nodesize];
 			initialise(new_node);
 
-			int old_node[nodesize];
+			int *old_node = new int[nodesize];
 			initialise(old_node);
 
 			// Choose two farthest seeds
@@ -1106,7 +1102,9 @@ void insert(vector <int> *points, FileHandler *fhout, int pg_num){
 
 			fhout->FlushPage(pg_num);
 			fhout->FlushPage(new_pg_num);
-
+			delete node;
+			delete old_node;
+			delete new_node;
 			// Load Parent Page
 			AdjustParent(pg_num, new_pg_num, fhout);
 		}
@@ -1128,7 +1126,7 @@ bool query(vector <int> *points, FileHandler *fhout, queue<int>*bfs_queue){
 		cout << "Node ID: " << pg_num << endl;
 		ph = fhout->PageAt(pg_num);
 		char *data = ph.GetData();
-		int node[nodesize];
+		int *node = new int[nodesize];
 		copy_to_memory(data, node);
 		print_mbr(node, -1);
 		if(!is_leaf(node)){
@@ -1157,6 +1155,7 @@ bool query(vector <int> *points, FileHandler *fhout, queue<int>*bfs_queue){
 		}
 		fhout->UnpinPage(pg_num);
 		fhout->FlushPage(pg_num);
+		delete node;
 		// fm.PrintBuffer();
 		cout << "queue size: " << bfs_queue->size() << endl;
 	}
