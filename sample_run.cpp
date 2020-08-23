@@ -8,63 +8,99 @@
 
 using namespace std;
 
-struct temp{
-	vector<int> b;
-};
-
-struct abc {
-	int a = 10;
-	temp c = temp();
-};
-
 int main() {
 	FileManager fm;
 
 	// Create a brand new file
 	FileHandler fh = fm.CreateFile("temp.txt");
 	cout << "File created " << endl;
-
+	int dim = 10;
+	int points = 1000000;
 	// Create a new page
-	PageHandler ph = fh.NewPage ();
-	char *data = ph.GetData ();
+	PageHandler ph;
+	int number = 0;
+	int start[dim];
+	for (int i = 0; i < dim; ++i)
+	{
+		start[i] = 100;
+	}
+	while(true){
+		ph = fh.NewPage();
+		char *data = ph.GetData ();
+		int pgnum = ph.GetPageNum();
+		int offset = 0;
+		while(offset + dim*4 < PAGE_CONTENT_SIZE){
+			for(int i = 0; i<dim; i++){
+				memcpy(&data[offset], &start[i], sizeof(int));
+				start[i] += 100;
+				offset+=4;
+			}
+			number++;
+		}
+		fh.MarkDirty(pgnum);
+		fh.UnpinPage(pgnum);
+		fh.FlushPage(pgnum);
+		if(number >= points){
+			break;
+		}
+	}
+	for (int i = 0; i < dim; ++i)
+	{
+		cout << start[i] << ' ';
+	}cout << endl;
 
-	abc d = abc();
-	d.a = 100;
-	d.c.b.push_back(200);
+	// // Get page number and say you just want to query something
+	// int number = ph.GetPageNum();
+	// fm.PrintBuffer();
 
-	// Store an integer at the very first location
-	// int num = 5;
-	memcpy (&data[0], &d, sizeof(abc));
+	// // Unpin Page 
+	// fh.UnpinPage(number);
 
-	// // Store an integer at the second location
-	// num = 1000;
-	// memcpy (&data[4], &num, sizeof(int));
+	// Print Buffer (Buffer shows page unpinned correctly)
+	// fm.PrintBuffer();
 
-	// Flush the page
-	fh.FlushPages ();
-	cout << "Data written and flushed" << endl;
+	// fh.FlushPage(number);
 
-	// Close the file
-	fm.CloseFile(fh);
+	// // Fetch page again and get data
+	// ph = fh.PageAt(number);
+	// data = ph.GetData();
 
-	// Reopen the same file, but for reading this time
-	fh = fm.OpenFile ("temp.txt");
-	cout << "File opened" << endl;
+	// Buffer still shows page unpinned ??
+	// fm.PrintBuffer();
+	// fh.UnpinPage(number);
 
-	// Get the very first page and its data
-	ph = fh.FirstPage ();
-	data = ph.GetData ();
+	// ph = fh.PageAt(number);
+	// data = ph.GetData();
 
-	// Output the first integer
-	abc *e = (abc*) data;
-	// memcpy (&e[0], &data[0], sizeof(abc));
-	cout << "First number: " << e->a << " " << e->c.b[0] << endl;
+	// // fh.UnpinPage(number);
 
-	// // Output the second integer
-	// memcpy (&num, &data[4], sizeof(int));
-	// cout << "Second number: " << num << endl;;
+	// fm.PrintBuffer();
 
-	// Close the file and destory it
+	// // Flush the page
+	// fh.FlushPages ();
+	// cout << "Data written and flushed" << endl;
+
+	// // Close the file
+	// fm.CloseFile(fh);
+
+	// // Reopen the same file, but for reading this time
+	// fh = fm.OpenFile ("temp.txt");
+	// cout << "File opened" << endl;
+
+	// // Get the very first page and its data
+	// ph = fh.FirstPage ();
+	// data = ph.GetData ();
+
+	// // Output the first integer
+	// abc *e = (abc*) data;
+	// // memcpy (&e[0], &data[0], sizeof(abc));
+	// cout << "First number: " << e->a << " " << e->c.b[0] << endl;
+
+	// // // Output the second integer
+	// // memcpy (&num, &data[4], sizeof(int));
+	// // cout << "Second number: " << num << endl;;
+
+	// // Close the file and destory it
 	fm.CloseFile (fh);
-	fm.DestroyFile ("temp.txt");
+	// fm.DestroyFile ("temp.txt");
 }

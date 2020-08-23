@@ -258,9 +258,9 @@ void recurse_until_root(FileHandler *fh, int start, int end){
 
 				// Update your own MBR
 				for(int i = 2; i<dim+2; i++){
-					if(point[0] == 100){
-						cout << point[i] << " " << child_point[i] << endl;
-					}
+					// if(point[0] == 100){
+						// cout << point[i] << " " << child_point[i] << endl;
+					// }
 					point[i] = min(point[i], child_point[i]);
 					point[i+dim] = max(point[i+dim], child_point[i+dim]);
 				}
